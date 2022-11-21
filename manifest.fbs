@@ -1,0 +1,34 @@
+namespace AnkamaGames;
+
+table Chunk {
+    hash:[ubyte];
+    offset:int64;
+    size:int64;
+    done:bool;
+}
+
+table File {
+    name:string;
+    size:int64;
+    hash:[ubyte];
+    chunks:[Chunk];
+    executable:int8;
+    symlink:string;
+}
+
+table Bundle {
+    hash:[ubyte];
+    chunks:[Chunk];
+}
+
+table Fragment {
+    name:string;
+    files:[File];
+    bundles:[Bundle];
+}
+
+table Manifest {
+    fragments:[Fragment];
+}
+
+root_type Manifest;
