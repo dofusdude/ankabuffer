@@ -59,6 +59,8 @@ func ParseManifest(data []byte) *Manifest {
 	bundleLookup := make(map[string]Bundle)
 	for i := 0; i < flatbManifest.FragmentsLength(); i++ {
 		fragment := AnkamaGames.Fragment{}
+		flatbManifest.Fragments(&fragment, i)
+
 		for j := 0; j < fragment.BundlesLength(); j++ {
 			bundle := AnkamaGames.Bundle{}
 			fragment.Bundles(&bundle, j)
