@@ -14,13 +14,13 @@ type Chunk struct {
 }
 
 type File struct {
-	Name       string  `json:"name"`
-	Size       int64   `json:"size"`
-	Hash       string  `json:"hash"`
-	Chunks     []Chunk `json:"chunks"`
-	Executable bool    `json:"executable"`
-	Symlink    string  `json:",omitempty"`
-	ReverseBundle *Bundle `json:"reverse_bundle"` // bundle that contains this file
+	Name           string   `json:"name"`
+	Size           int64    `json:"size"`
+	Hash           string   `json:"hash"`
+	Chunks         []Chunk  `json:"chunks"`
+	Executable     bool     `json:"executable"`
+	Symlink        string   `json:",omitempty"`
+	ReverseBundles []Bundle `json:"reverse_bundles"` // bundle that contains this file
 }
 
 type Bundle struct {
@@ -56,14 +56,9 @@ func ParseManifest(data []byte) *Manifest {
 	manifest := Manifest{}
 	manifest.Fragments = make(map[string]Fragment)
 
+	bundleLookup := make(map[string]Bundle)
 	for i := 0; i < flatbManifest.FragmentsLength(); i++ {
 		fragment := AnkamaGames.Fragment{}
-		flatbManifest.Fragments(&fragment, i)
-
-		fragmentJson := Fragment{}
-		fragmentJson.Files = make(map[string]File)
-		fragmentJson.Name = string(fragment.Name())
-		fragmentJson.Bundles = make([]Bundle, fragment.BundlesLength())
 		for j := 0; j < fragment.BundlesLength(); j++ {
 			bundle := AnkamaGames.Bundle{}
 			fragment.Bundles(&bundle, j)
@@ -79,7 +74,22 @@ func ParseManifest(data []byte) *Manifest {
 				chunkJson.Size = chunk.Size()
 				bundleJson.Chunks[k] = chunkJson
 			}
-			fragmentJson.Bundles[j] = bundleJson
+			bundleLookup[bundleJson.Hash] = bundleJson
+		}
+	}
+
+	for i := 0; i < flatbManifest.FragmentsLength(); i++ {
+		fragment := AnkamaGames.Fragment{}
+		flatbManifest.Fragments(&fragment, i)
+
+		fragmentJson := Fragment{}
+		fragmentJson.Files = make(map[string]File)
+		fragmentJson.Name = string(fragment.Name())
+		fragmentJson.Bundles = make([]Bundle, fragment.BundlesLength())
+		for j := 0; j < fragment.BundlesLength(); j++ {
+			bundle := AnkamaGames.Bundle{}
+			fragment.Bundles(&bundle, j)
+			fragmentJson.Bundles[j] = bundleLookup[getHash(&bundle)]
 		}
 
 		for j := 0; j < fragment.FilesLength(); j++ {
@@ -103,14 +113,31 @@ func ParseManifest(data []byte) *Manifest {
 			if file.Symlink() != nil {
 				fileJson.Symlink = string(file.Symlink())
 			}
-			fileJson.ReverseBundle = nil
+			bundles := NewSet[string]()
 			for _, bundle := range fragmentJson.Bundles {
 				for _, chunk := range bundle.Chunks {
-					if chunk.Hash == fileJson.Hash {
-						fileJson.ReverseBundle = &bundle
-						break
+					if len(fileJson.Chunks) == 0 {
+						if chunk.Hash == fileJson.Hash {
+							fileJson.ReverseBundles = []Bundle{bundle}
+							break
+						}
+					} else {
+						for _, fileChunk := range fileJson.Chunks {
+							if chunk.Hash == fileChunk.Hash {
+								bundles.Add(bundle.Hash)
+							}
+						}
 					}
 				}
+			}
+			fileJson.ReverseBundles = make([]Bundle, bundles.Size())
+			i := 0
+			for _, hash := range bundles.Slice() {
+				fileJson.ReverseBundles[i] = bundleLookup[hash]
+				i++
+			}
+			if len(fileJson.ReverseBundles) == 0 {
+				fileJson.ReverseBundles = nil
 			}
 			fragmentJson.Files[fileJson.Name] = fileJson
 		}
@@ -120,17 +147,21 @@ func ParseManifest(data []byte) *Manifest {
 }
 
 func GetNeededBundles(files []File) []Bundle {
-	bundles := make(map[string]Bundle)
+	bundles := NewSet[string]()
+	bundleLookup := make(map[string]Bundle)
 	for _, file := range files {
-		if file.ReverseBundle != nil {
-			bundles[file.ReverseBundle.Hash] = *file.ReverseBundle
+		if file.ReverseBundles != nil {
+			for _, bundle := range file.ReverseBundles {
+				bundles.Add(bundle.Hash)
+				bundleLookup[bundle.Hash] = bundle
+			}
 		}
 	}
-	result := make([]Bundle, len(bundles))
+	res := make([]Bundle, bundles.Size())
 	i := 0
-	for _, bundle := range bundles {
-		result[i] = bundle
+	for _, hash := range bundles.Slice() {
+		res[i] = bundleLookup[hash]
 		i++
 	}
-	return result
+	return res
 }
