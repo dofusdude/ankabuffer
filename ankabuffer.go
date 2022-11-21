@@ -1,8 +1,9 @@
 package ankabuffer
 
 import (
-	"github.com/dofusdude/ankabuffer/AnkamaGames"
 	"strconv"
+
+	"github.com/dofusdude/ankabuffer/AnkamaGames"
 )
 
 type Chunk struct {
@@ -19,6 +20,7 @@ type File struct {
 	Chunks     []Chunk `json:"chunks"`
 	Executable bool    `json:"executable"`
 	Symlink    string  `json:",omitempty"`
+	ReverseBundle *Bundle `json:"reverse_bundle"` // bundle that contains this file
 }
 
 type Bundle struct {
@@ -97,11 +99,38 @@ func ParseManifest(data []byte) *Manifest {
 				chunkJson.Size = chunk.Size()
 				fileJson.Chunks[k] = chunkJson
 			}
+			fileJson.Executable = file.Executable() == 1
+			if file.Symlink() != nil {
+				fileJson.Symlink = string(file.Symlink())
+			}
+			fileJson.ReverseBundle = nil
+			for _, bundle := range fragmentJson.Bundles {
+				for _, chunk := range bundle.Chunks {
+					if chunk.Hash == fileJson.Hash {
+						fileJson.ReverseBundle = &bundle
+						break
+					}
+				}
+			}
 			fragmentJson.Files[fileJson.Name] = fileJson
 		}
-
 		manifest.Fragments[fragmentJson.Name] = fragmentJson
 	}
-
 	return &manifest
+}
+
+func GetNeededBundles(files []File) []Bundle {
+	bundles := make(map[string]Bundle)
+	for _, file := range files {
+		if file.ReverseBundle != nil {
+			bundles[file.ReverseBundle.Hash] = *file.ReverseBundle
+		}
+	}
+	result := make([]Bundle, len(bundles))
+	i := 0
+	for _, bundle := range bundles {
+		result[i] = bundle
+		i++
+	}
+	return result
 }
