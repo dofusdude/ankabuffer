@@ -20,7 +20,7 @@ type File struct {
 	Chunks         []Chunk  `json:"chunks"`
 	Executable     bool     `json:"executable"`
 	Symlink        string   `json:",omitempty"`
-	ReverseBundles []Bundle `json:"reverse_bundles"` // bundle that contains this file
+	ReverseBundles []string `json:"reverse_bundles"` // bundles containing chunks or entire file that are needed to reconstruct this file
 }
 
 type Bundle struct {
@@ -120,7 +120,7 @@ func ParseManifest(data []byte) *Manifest {
 				for _, chunk := range bundle.Chunks {
 					if len(fileJson.Chunks) == 0 {
 						if chunk.Hash == fileJson.Hash {
-							fileJson.ReverseBundles = []Bundle{bundle}
+							fileJson.ReverseBundles = []string{bundle.Hash}
 							break
 						}
 					} else {
@@ -132,14 +132,10 @@ func ParseManifest(data []byte) *Manifest {
 					}
 				}
 			}
-			fileJson.ReverseBundles = make([]Bundle, bundles.Size())
-			i := 0
-			for _, hash := range bundles.Slice() {
-				fileJson.ReverseBundles[i] = bundleLookup[hash]
-				i++
-			}
-			if len(fileJson.ReverseBundles) == 0 {
+			if bundles.Size() == 0 {
 				fileJson.ReverseBundles = nil
+			} else {
+				fileJson.ReverseBundles = bundles.Slice()
 			}
 			fragmentJson.Files[fileJson.Name] = fileJson
 		}
@@ -148,22 +144,22 @@ func ParseManifest(data []byte) *Manifest {
 	return &manifest
 }
 
-func GetNeededBundles(files []File) []Bundle {
+func GetNeededBundles(files []File) []string {
 	bundles := NewSet[string]()
-	bundleLookup := make(map[string]Bundle)
 	for _, file := range files {
 		if file.ReverseBundles != nil {
-			for _, bundle := range file.ReverseBundles {
-				bundles.Add(bundle.Hash)
-				bundleLookup[bundle.Hash] = bundle
-			}
+			bundles.AddMulti(file.ReverseBundles...)
 		}
 	}
-	res := make([]Bundle, bundles.Size())
-	i := 0
-	for _, hash := range bundles.Slice() {
-		res[i] = bundleLookup[hash]
-		i++
+	return bundles.Slice()
+}
+
+func GetBundleHashMap(manifest *Manifest) map[string]Bundle {
+	bundleHashMap := make(map[string]Bundle)
+	for _, fragment := range manifest.Fragments {
+		for _, bundle := range fragment.Bundles {
+			bundleHashMap[bundle.Hash] = bundle
+		}
 	}
-	return res
+	return bundleHashMap
 }
