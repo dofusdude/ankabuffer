@@ -1,6 +1,7 @@
 package ankabuffer
 
 import (
+	"fmt"
 	"strconv"
 
 	"github.com/dofusdude/ankabuffer/AnkamaGames"
@@ -46,7 +47,7 @@ type iHashFile interface {
 func getHash[T iHashFile](file T) string {
 	hash := ""
 	for i := 0; i < file.HashLength(); i++ {
-		hash += strconv.FormatInt(int64(file.Hash(i)), 16)
+		hash += fmt.Sprintf("%02s", strconv.FormatInt(int64(file.Hash(i)), 16))
 	}
 	return hash
 }
