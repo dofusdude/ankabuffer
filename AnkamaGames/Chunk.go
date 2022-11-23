@@ -67,7 +67,7 @@ func (rcv *Chunk) MutateHash(j int, n byte) bool {
 	return false
 }
 
-func (rcv *Chunk) Offset() int64 {
+func (rcv *Chunk) Size() int64 {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
 	if o != 0 {
 		return rcv._tab.GetInt64(o + rcv._tab.Pos)
@@ -75,11 +75,11 @@ func (rcv *Chunk) Offset() int64 {
 	return 0
 }
 
-func (rcv *Chunk) MutateOffset(n int64) bool {
+func (rcv *Chunk) MutateSize(n int64) bool {
 	return rcv._tab.MutateInt64Slot(6, n)
 }
 
-func (rcv *Chunk) Size() int64 {
+func (rcv *Chunk) Offset() int64 {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
 	if o != 0 {
 		return rcv._tab.GetInt64(o + rcv._tab.Pos)
@@ -87,7 +87,7 @@ func (rcv *Chunk) Size() int64 {
 	return 0
 }
 
-func (rcv *Chunk) MutateSize(n int64) bool {
+func (rcv *Chunk) MutateOffset(n int64) bool {
 	return rcv._tab.MutateInt64Slot(8, n)
 }
 
@@ -112,11 +112,11 @@ func ChunkAddHash(builder *flatbuffers.Builder, hash flatbuffers.UOffsetT) {
 func ChunkStartHashVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(1, numElems, 1)
 }
-func ChunkAddOffset(builder *flatbuffers.Builder, offset int64) {
-	builder.PrependInt64Slot(1, offset, 0)
-}
 func ChunkAddSize(builder *flatbuffers.Builder, size int64) {
-	builder.PrependInt64Slot(2, size, 0)
+	builder.PrependInt64Slot(1, size, 0)
+}
+func ChunkAddOffset(builder *flatbuffers.Builder, offset int64) {
+	builder.PrependInt64Slot(2, offset, 0)
 }
 func ChunkAddDone(builder *flatbuffers.Builder, done bool) {
 	builder.PrependBoolSlot(3, done, false)

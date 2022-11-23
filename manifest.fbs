@@ -2,14 +2,14 @@ namespace AnkamaGames;
 
 table Chunk {
     hash:[ubyte];
-    offset:int64;
-    size:int64;
+    size:long;
+    offset:long;
     done:bool;
 }
 
 table File {
     name:string;
-    size:int64;
+    size:long;
     hash:[ubyte];
     chunks:[Chunk];
     executable:int8;
