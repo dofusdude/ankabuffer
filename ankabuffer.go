@@ -2,9 +2,8 @@ package ankabuffer
 
 import (
 	"fmt"
-	"strconv"
-
 	"github.com/dofusdude/ankabuffer/AnkamaGames"
+	"strconv"
 )
 
 type Chunk struct {
@@ -131,7 +130,7 @@ func ParseManifest(data []byte) *Manifest {
 					for _, chunk := range bundle.Chunks {
 						if len(file.Chunks) == 0 {
 							if chunk.Hash == file.Hash {
-								realFile.ReverseBundles = []string{bundle.Hash}
+								bundles.Add(bundle.Hash)
 								break
 							}
 						} else {
@@ -143,13 +142,13 @@ func ParseManifest(data []byte) *Manifest {
 						}
 					}
 				}
-				if bundles.Size() == 0 {
-					realFile.ReverseBundles = nil
-				} else {
-					realFile.ReverseBundles = bundles.Slice()
-				}
-				fragment.Files[fileIdx] = realFile
 			}
+			if bundles.Size() == 0 {
+				realFile.ReverseBundles = nil
+			} else {
+				realFile.ReverseBundles = bundles.Slice()
+			}
+			fragment.Files[fileIdx] = realFile
 		}
 	}
 	return &manifest
