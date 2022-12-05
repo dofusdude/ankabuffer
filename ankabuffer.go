@@ -116,31 +116,41 @@ func ParseManifest(data []byte) *Manifest {
 			if file.Symlink() != nil {
 				fileJson.Symlink = string(file.Symlink())
 			}
+			fragmentJson.Files[fileJson.Name] = fileJson
+		}
+		manifest.Fragments[fragmentJson.Name] = fragmentJson
+	}
+
+	// add reverse bundles searching in all fragments
+	for _, fragment := range manifest.Fragments {
+		for fileIdx, file := range fragment.Files {
+			realFile := file
 			bundles := NewSet[string]()
-			for _, bundle := range fragmentJson.Bundles {
-				for _, chunk := range bundle.Chunks {
-					if len(fileJson.Chunks) == 0 {
-						if chunk.Hash == fileJson.Hash {
-							fileJson.ReverseBundles = []string{bundle.Hash}
-							break
-						}
-					} else {
-						for _, fileChunk := range fileJson.Chunks {
-							if chunk.Hash == fileChunk.Hash {
-								bundles.Add(bundle.Hash)
+			for _, searchFragment := range manifest.Fragments {
+				for _, bundle := range searchFragment.Bundles {
+					for _, chunk := range bundle.Chunks {
+						if len(file.Chunks) == 0 {
+							if chunk.Hash == file.Hash {
+								realFile.ReverseBundles = []string{bundle.Hash}
+								break
+							}
+						} else {
+							for _, fileChunk := range file.Chunks {
+								if chunk.Hash == fileChunk.Hash {
+									bundles.Add(bundle.Hash)
+								}
 							}
 						}
 					}
 				}
+				if bundles.Size() == 0 {
+					realFile.ReverseBundles = nil
+				} else {
+					realFile.ReverseBundles = bundles.Slice()
+				}
+				fragment.Files[fileIdx] = realFile
 			}
-			if bundles.Size() == 0 {
-				fileJson.ReverseBundles = nil
-			} else {
-				fileJson.ReverseBundles = bundles.Slice()
-			}
-			fragmentJson.Files[fileJson.Name] = fileJson
 		}
-		manifest.Fragments[fragmentJson.Name] = fragmentJson
 	}
 	return &manifest
 }
