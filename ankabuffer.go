@@ -2,8 +2,9 @@ package ankabuffer
 
 import (
 	"fmt"
-	"github.com/dofusdude/ankabuffer/AnkamaGames"
 	"strconv"
+
+	"github.com/dofusdude/ankabuffer/AnkamaGames"
 )
 
 type Chunk struct {
@@ -35,7 +36,8 @@ type Fragment struct {
 }
 
 type Manifest struct {
-	Fragments map[string]Fragment `json:"fragments"`
+	GameVersion string              `json:"game_version"`
+	Fragments   map[string]Fragment `json:"fragments"`
 }
 
 type iHashFile interface {
@@ -51,9 +53,10 @@ func getHash[T iHashFile](file T) string {
 	return hash
 }
 
-func ParseManifest(data []byte) *Manifest {
+func ParseManifest(data []byte, gameVersion string) *Manifest {
 	flatbManifest := AnkamaGames.GetRootAsManifest(data, 0)
 	manifest := Manifest{}
+	manifest.GameVersion = gameVersion
 	manifest.Fragments = make(map[string]Fragment)
 
 	bundleLookup := make(map[string]Bundle)
