@@ -53,35 +53,15 @@ func getHash[T iHashFile](file T) string {
 	return hash
 }
 
-func ParseManifest(data []byte, gameVersion string) *Manifest {
+func ParseManifest(data []byte, gameVersion string) (*Manifest, error) {
 	flatbManifest := AnkamaGames.GetRootAsManifest(data, 0)
 	manifest := Manifest{}
 	manifest.GameVersion = gameVersion
 	manifest.Fragments = make(map[string]Fragment)
 
-	bundleLookup := make(map[string]Bundle)
-	for i := 0; i < flatbManifest.FragmentsLength(); i++ {
-		fragment := AnkamaGames.Fragment{}
-		flatbManifest.Fragments(&fragment, i)
-
-		for j := 0; j < fragment.BundlesLength(); j++ {
-			bundle := AnkamaGames.Bundle{}
-			fragment.Bundles(&bundle, j)
-			bundleJson := Bundle{}
-			bundleJson.Hash = getHash(&bundle)
-			bundleJson.Chunks = make([]Chunk, bundle.ChunksLength())
-			for k := 0; k < bundle.ChunksLength(); k++ {
-				chunk := AnkamaGames.Chunk{}
-				bundle.Chunks(&chunk, k)
-				chunkJson := Chunk{}
-				chunkJson.Hash = getHash(&chunk)
-				chunkJson.Offset = chunk.Offset()
-				chunkJson.Size = chunk.Size()
-				bundleJson.Chunks[k] = chunkJson
-			}
-			bundleLookup[bundleJson.Hash] = bundleJson
-		}
-	}
+	// for each file, find the unique bundles that contain chunks needed for the file
+	// so for first iteration, we save the bundle hash for each chunk hash
+	bundleLookup := make(map[string]string)
 
 	for i := 0; i < flatbManifest.FragmentsLength(); i++ {
 		fragment := AnkamaGames.Fragment{}
@@ -91,10 +71,27 @@ func ParseManifest(data []byte, gameVersion string) *Manifest {
 		fragmentJson.Files = make(map[string]File)
 		fragmentJson.Name = string(fragment.Name())
 		fragmentJson.Bundles = make([]Bundle, fragment.BundlesLength())
+
 		for j := 0; j < fragment.BundlesLength(); j++ {
 			bundle := AnkamaGames.Bundle{}
 			fragment.Bundles(&bundle, j)
-			fragmentJson.Bundles[j] = bundleLookup[getHash(&bundle)]
+
+			bundleJson := Bundle{}
+			bundleJson.Hash = getHash(&bundle)
+			bundleJson.Chunks = make([]Chunk, bundle.ChunksLength())
+			for k := 0; k < bundle.ChunksLength(); k++ {
+				chunk := AnkamaGames.Chunk{}
+				bundle.Chunks(&chunk, k)
+
+				chunkJson := Chunk{}
+				chunkJson.Hash = getHash(&chunk)
+				chunkJson.Offset = chunk.Offset()
+				chunkJson.Size = chunk.Size()
+				bundleJson.Chunks[k] = chunkJson
+				bundleLookup[chunkJson.Hash] = bundleJson.Hash // prepare backlink
+			}
+
+			fragmentJson.Bundles[j] = bundleJson
 		}
 
 		for j := 0; j < fragment.FilesLength(); j++ {
@@ -123,29 +120,29 @@ func ParseManifest(data []byte, gameVersion string) *Manifest {
 		manifest.Fragments[fragmentJson.Name] = fragmentJson
 	}
 
-	// add reverse bundles searching in all fragments
+	// backlink bundles to files
 	for _, fragment := range manifest.Fragments {
 		for fileIdx, file := range fragment.Files {
 			realFile := file
 			bundles := NewSet[string]()
-			for _, searchFragment := range manifest.Fragments {
-				for _, bundle := range searchFragment.Bundles {
-					for _, chunk := range bundle.Chunks {
-						if len(file.Chunks) == 0 {
-							if chunk.Hash == file.Hash {
-								bundles.Add(bundle.Hash)
-								break
-							}
-						} else {
-							for _, fileChunk := range file.Chunks {
-								if chunk.Hash == fileChunk.Hash {
-									bundles.Add(bundle.Hash)
-								}
-							}
-						}
+
+			// look for file hash in all chunks
+			if len(file.Chunks) == 0 {
+				if bundleHash, ok := bundleLookup[file.Hash]; ok {
+					bundles.Add(bundleHash)
+				} else {
+					return nil, fmt.Errorf("File hash %s not found in any bundle", file.Hash)
+				}
+			} else {
+				for _, chunk := range file.Chunks {
+					if bundleHash, ok := bundleLookup[chunk.Hash]; ok {
+						bundles.Add(bundleHash)
+					} else {
+						return nil, fmt.Errorf("Chunk hash %s for file not found in any bundle", chunk.Hash)
 					}
 				}
 			}
+
 			if bundles.Size() == 0 {
 				realFile.ReverseBundles = nil
 			} else {
@@ -154,7 +151,8 @@ func ParseManifest(data []byte, gameVersion string) *Manifest {
 			fragment.Files[fileIdx] = realFile
 		}
 	}
-	return &manifest
+
+	return &manifest, nil
 }
 
 func GetNeededBundles(files []File) []string {

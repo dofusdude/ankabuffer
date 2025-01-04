@@ -35,9 +35,9 @@ func NewSet[T comparable]() *Set[T] {
 }
 
 func (s *Set[T]) Slice() []T {
-	var res []T
-	for v := range s.list {
-		res = append(res, v)
+	var res = make([]T, 0, len(s.list))
+	for k := range s.list {
+		res = append(res, k)
 	}
 	return res
 }
